@@ -1,3 +1,4 @@
+from plyer import gps
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.properties import ObjectProperty, ListProperty, StringProperty, NumericProperty
@@ -10,9 +11,10 @@ from kivy.uix.listview import ListItemButton
 from kivy.factory import Factory
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.modalview import ModalView
-from kivy.clock import Clock
+from kivy.clock import Clock, mainthread
 import random
 import datetime
+import requests
 
 class WeatherRoot(BoxLayout):
     current_weather = ObjectProperty()
@@ -88,32 +90,40 @@ class LocationButton(ListItemButton):
 class AddLocationForm(ModalView):
     search_input = ObjectProperty()
     search_results = ObjectProperty()
-    
+    error_pop = ObjectProperty
+
 
     def errorPopup(self, error_message):
-        error_pop = Factory.MessageBox()
-        error_pop.message_title = "Error Message"
-        error_pop.message_text = error_message
-        error_pop.open()
-    
-    def search_lat_long(self):
-        search_template = ("http://api.openweathermap.org/data/2.5/find?"+
-                            "lat={}&lon={}&type=like")
-        coord = self.search_input.text
-        lat = coord.split(",")[0].strip()
-        lon = coord.split(",")[1].strip()
-        search_url = search_template.format(lat, lon)
-        request = UrlRequest(search_url, self.found_location, timeout=5, 
-                            on_error=self.errorMessage)
+        self.error_pop = Factory.MessageBox()
+        self.error_pop.message_title = "Error Message"
+        self.error_pop.message_text = error_message
+        self.error_pop.open()
+
+    def current_location(self):
+        try:
+            gps.configure(on_location=self.on_location)
+            gps.start()
+
+        except NotImplementedError:
+            self.errorPopup("GPS support is not implemented on your device")
+            Clock.schedule_once(lambda d: self.error_pop.dismiss(), 3)
+
+    @mainthread
+    def on_location(self, **kwargs):
+        search_template = ("http://api.openweathermap.org/data/2.5/" +
+            "weather?lat={}&lon={}")    
+        search_url = search_template.format(kwargs['lat'], kwargs['lon'])
+        data = request.get(search_url).json()
+        location = (data['name'], data['sys']['country'])
+        WeatherApp.get_running_app().root.show_current_weather(location)
         
     def search_location(self):
-        
         search_template = ("http://api.openweathermap.org/data/2.5/" + 
                     "find?q={}&type=like")
         search_url = search_template.format(self.search_input.text)
         request = UrlRequest(search_url, self.found_location, timeout=5, 
                             on_error=self.errorMessage)
-        
+
     def found_location(self, request, data):
         #print data[1]
         if type(data) is not dict:
@@ -136,10 +146,6 @@ class AddLocationForm(ModalView):
             del self.search_results.adapter.data[:]
             self.search_results.adapter.data.extend(cities)
             self.search_results._trigger_reset_populate()
-            
-            
-    def errorMessage(self, request, error):
-        self.search_results.item_strings = ["There was an error with your results."]
         
 class Forecast(BoxLayout):
     location = ListProperty(['New York', 'US'])
@@ -193,6 +199,9 @@ class WeatherApp(App):
                 self.root.forecast.update_weather()
             except AttributeError:
                 pass
+
+    def on_pause(self):
+        return True
 
 def locations_args_converter(index, data_item):
         city, country = data_item

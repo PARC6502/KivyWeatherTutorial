@@ -63,7 +63,7 @@ WeatherRoot:
             Button:
                 text: "Current Location"
                 size_hint_x: 25
-                on_press: root.search_lat_long()
+                on_press: root.current_location()
         ListView:
             id: search_results_list           
             adapter: 
@@ -97,19 +97,13 @@ WeatherRoot:
     message_title: ""
     title: root.message_title
     size_hint: None, None
-    size: "400dp", "400dp"
+    size: "400dp", "150dp"
     message_text: ""
     
     BoxLayout:
         orientation: 'vertical'
         Label:
             text: root.message_text
-        Button:
-            text: "Dismiss"
-            size_hint_y: None
-            height: "40dp"
-            on_press: root.dismiss()
-            
 
 <CurrentWeather>:
     orientation: "vertical"
